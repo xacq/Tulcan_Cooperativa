@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<h5 class="mb-3">Operaciones (vista rápida)</h5>
+<div class="card shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-striped mb-0">
+      <thead>
+        <tr>
+          <th>Cliente</th>
+          <th>Oficina</th>
+          <th>Estado</th>
+          <th>Tipo</th>
+          <th>Monto</th>
+          <th>Saldo</th>
+          <th>Días mora</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td>{{ r.cliente }}</td>
+          <td>{{ r.oficina }}</td>
+          <td>{{ r.estado }}</td>
+          <td>{{ r.tipo_credito }}</td>
+          <td>{{ r.monto_otorgado }}</td>
+          <td>{{ r.saldo_total }}</td>
+          <td>{{ r.dias_mora }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="text-muted">No hay operaciones cargadas.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

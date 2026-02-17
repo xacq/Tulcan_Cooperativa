@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h5 class="mb-0">Batches</h5>
+  <a class="btn btn-primary btn-sm" href="{% url 'upload_data' %}">Nueva carga</a>
+</div>
+
+<div class="card shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-striped mb-0">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Fecha</th>
+          <th>Usuario</th>
+          <th>Modo</th>
+          <th>Estado</th>
+          <th>Total</th>
+          <th>Cargadas</th>
+          <th>Omitidas</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for b in batches %}
+        <tr>
+          <td>{{ b.id }}</td>
+          <td>{{ b.uploaded_at }}</td>
+          <td>{{ b.uploaded_by.username }}</td>
+          <td>{{ b.get_load_mode_display }}</td>
+          <td>
+            {% if b.status == "PROCESSED" %}
+              <span class="badge bg-success">{{ b.status }}</span>
+            {% elif b.status == "FAILED" %}
+              <span class="badge bg-danger">{{ b.status }}</span>
+            {% else %}
+              <span class="badge bg-secondary">{{ b.status }}</span>
+            {% endif %}
+          </td>
+          <td>{{ b.rows_total }}</td>
+          <td>{{ b.rows_loaded }}</td>
+          <td>{{ b.rows_skipped }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8" class="text-muted">Sin cargas todavía.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

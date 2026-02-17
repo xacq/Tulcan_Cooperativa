@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card shadow-sm">
+  <div class="card-body">
+    <h5 class="mb-3">Carga de datos</h5>
+
+    <form method="post" enctype="multipart/form-data" class="row g-3">
+      {% csrf_token %}
+      <div class="col-12 col-md-4">
+        <label class="form-label">Modo de carga</label>
+        {{ form.load_mode }}
+      </div>
+      <div class="col-12 col-md-8">
+        <label class="form-label">Archivo (CSV/XLS/XLSX)</label>
+        {{ form.file }}
+      </div>
+      <div class="col-12">
+        <button class="btn btn-primary" type="submit">Cargar</button>
+        <a class="btn btn-outline-secondary" href="{% url 'batches' %}">Ver batches</a>
+      </div>
+    </form>
+
+    <hr class="my-4">
+    <p class="text-muted small mb-0">
+      Se cargan únicamente las columnas permitidas (whitelist) para mantener integridad y trazabilidad.
+    </p>
+  </div>
+</div>
+{% endblock %}

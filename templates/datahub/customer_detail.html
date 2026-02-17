@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h5 class="mb-0">Detalle cliente: {{ c.cliente }}</h5>
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-secondary btn-sm" href="{% url 'customers_list' %}">Volver</a>
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'customer_edit' c.cliente %}">Modificar</a>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-12 col-lg-6">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h6 class="mb-3">Datos del cliente (agregado)</h6>
+        <dl class="row mb-0 small">
+          <dt class="col-5">Oficina</dt><dd class="col-7">{{ c.oficina }}</dd>
+          <dt class="col-5">Tipo crédito</dt><dd class="col-7">{{ c.tipo_credito }}</dd>
+          <dt class="col-5">Garantía</dt><dd class="col-7">{{ c.garantia }}</dd>
+          <dt class="col-5">Sexo</dt><dd class="col-7">{{ c.sexo }}</dd>
+          <dt class="col-5">Calificación (contraste)</dt><dd class="col-7">{{ c.calificacion_riesgo }}</dd>
+          <dt class="col-5">N operaciones</dt><dd class="col-7">{{ c.n_operaciones }}</dd>
+          <dt class="col-5">N vigentes</dt><dd class="col-7">{{ c.n_vigentes }}</dd>
+          <dt class="col-5">Monto total</dt><dd class="col-7">{{ c.monto_total }}</dd>
+          <dt class="col-5">Saldo total</dt><dd class="col-7">{{ c.saldo_total }}</dd>
+          <dt class="col-5">Patrimonio</dt><dd class="col-7">{{ c.patrimonio_tec }}</dd>
+          <dt class="col-5">Máx días mora</dt><dd class="col-7">{{ c.max_dias_mora }}</dd>
+          <dt class="col-5">Riesgo actual (regla)</dt>
+          <dd class="col-7">
+            {% if c.riesgo_actual %}
+              <span class="badge bg-danger">Alto</span>
+            {% else %}
+              <span class="badge bg-success">Bajo</span>
+            {% endif %}
+          </dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-6">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h6 class="mb-3">Scoring (Modelo ML)</h6>
+        <div id="lastScoreBox" class="mb-3">
+          {% if c.ml_scored_at %}
+            <div class="alert alert-secondary small mb-0">
+              <div class="d-flex align-items-center justify-content-between">
+                <div>
+                  <b>Última evaluación guardada:</b>
+                  {{ c.ml_scored_at }}
+                  {% if c.ml_scored_by %}<span class="text-muted"> (por {{ c.ml_scored_by }})</span>{% endif %}
+                </div>
+                <div>
+                  {% if c.ml_pred_last %}
+                    <span class="badge bg-danger">ALTO</span>
+                  {% else %}
+                    <span class="badge bg-success">BAJO</span>
+                  {% endif %}
+                </div>
+              </div>
+              <div class="mt-1">
+                <b>Probabilidad de incumplimiento::</b>
+                {% if c.ml_proba_last is not None %}
+                  {{ c.ml_proba_last|floatformat:4 }} <span class="text-muted">(0..1)</span>
+                {% else %}
+                  -
+                {% endif %}
+              </div>
+            </div>
+          {% else %}
+            <div class="alert alert-warning small mb-0">
+              Aún no se ha guardado un scoring ML para este cliente. Presiona <b>Evaluar con modelo</b>.
+            </div>
+          {% endif %}
+        </div>
+
+
+        <div class="mb-3">
+          <button id="btnScore" class="btn btn-primary btn-sm" type="button">Evaluar con modelo</button>
+        </div>
+
+        <div id="scoreBox" class="border rounded p-3 bg-light">
+          <div class="text-muted small">Presiona “Evaluar con modelo” para obtener probabilidad y clasificación.</div>
+        </div>
+
+        <hr class="my-3">
+        <p class="text-muted small mb-0">
+          Nota: Calificación de riesgo es solo contraste visual/reglas; el modelo ML evalúa con variables agregadas.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const btn = document.getElementById("btnScore");
+  const box = document.getElementById("scoreBox");
+  const lastBox = document.getElementById("lastScoreBox");
+
+  function renderLastSavedScore({ probaFinal, predTxt, predBadge, scoredAt, scoredBy }) {
+    const probaPct = (Number(probaFinal) * 100).toFixed(2) + "%";
+    const by = scoredBy ? ` <span class="text-muted">(por ${scoredBy})</span>` : "";
+    const when = scoredAt ? scoredAt : "-";
+
+    lastBox.innerHTML = `
+      <div class="alert alert-secondary small mb-0">
+        <div class="d-flex align-items-center justify-content-between">
+          <div>
+            <b>Última evaluación guardada:</b> ${when}${by}
+          </div>
+          <div>
+            <span class="badge ${predBadge}">${predTxt}</span>
+          </div>
+        </div>
+        <div class="mt-1">
+          <b>Probabilidad final (norma):</b> ${probaPct}
+        </div>
+      </div>
+    `;
+  }
+
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    box.innerHTML = `<div class="text-muted small">Calculando...</div>`;
+
+    try {
+      const res = await fetch("{% url 'customer_score' c.cliente %}");
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        const msg = data.error ? data.error : ("HTTP " + res.status);
+        box.innerHTML = `<div class="text-danger small">Error: ${msg}</div>`;
+        return;
+      }
+
+      // ----------------------------
+      // 1) Leer valores del backend (compatibles con varios nombres)
+      // ----------------------------
+      const probaMLVal = (data.proba_ml !== undefined && data.proba_ml !== null)
+        ? Number(data.proba_ml)
+        : Number(data.proba_riesgo_alto); // fallback antiguo
+
+      const probaFinalVal = (data.proba_final !== undefined && data.proba_final !== null)
+        ? Number(data.proba_final)
+        : probaMLVal; // si no viene, usa ML
+
+      const cat = data.categoria_tabla ?? data.categoria_morosidad ?? "-";
+      const nivel = data.nivel_tabla ?? data.nivel_morosidad ?? "-";
+
+      // Clasificación: si backend manda pred_final úsalo, si no usa pred_riesgo_alto
+      const predBin = (data.pred_final !== undefined && data.pred_final !== null)
+        ? Number(data.pred_final)
+        : Number(data.pred_riesgo_alto);
+
+      const predTxt = predBin === 1 ? "ALTO" : "BAJO";
+      const predBadge = predBin === 1 ? "bg-danger" : "bg-success";
+
+      const probaMLPct = (probaMLVal * 100).toFixed(2);
+      const probaFinalPct = (probaFinalVal * 100).toFixed(2);
+
+      // ----------------------------
+      // 2) Render: mostrar SOLO el % final como principal
+      // ----------------------------
+      box.innerHTML = `
+        <div class="d-flex align-items-center justify-content-between">
+          <div>
+            <div class="small text-muted">Probabilidad final (según norma)</div>
+            <div class="fs-5 fw-semibold">${probaFinalPct}%</div>
+
+            <div class="mt-2 small">
+              <b>Categoría:</b> <h1 class="fs-6 fw-semibold">${cat}</h1>
+              <span class="text-muted">(${nivel})</span>
+            </div>
+
+            <div class="mt-2 small text-muted">
+              ML crudo: ${probaMLPct}%
+            </div>
+          </div>
+
+          <div class="text-end">
+            <div class="small text-muted">Clasificación</div>
+            <span class="badge ${predBadge} fs-6">${predTxt}</span>
+          </div>
+        </div>
+
+        <hr>
+
+        <div class="small">
+          <div><b>Riesgo (regla/tablas):</b> ${data.riesgo_regla_txt ?? (data.riesgo_actual_regla === 1 ? "ALTO" : "BAJO")}</div>
+          <div><b>Calificación (contraste):</b> ${data.calificacion_riesgo_contraste || "-"}</div>
+          <div class="text-muted mt-2"><b>Threshold:</b> ${data.threshold}</div>
+        </div>
+      `;
+
+      // ----------------------------
+      // 3) Actualizar “Último guardado” con el % FINAL
+      // ----------------------------
+      renderLastSavedScore({
+        probaFinal: probaFinalVal,
+        predTxt,
+        predBadge,
+        scoredAt: data.ml_scored_at || null,
+        scoredBy: data.ml_scored_by || null
+      });
+
+    } catch (e) {
+      box.innerHTML = `<div class="text-danger small">Error consultando scoring: ${e}</div>`;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+</script>
+{% endblock %}

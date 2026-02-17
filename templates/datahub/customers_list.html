@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h5 class="mb-0">Clientes (agregado)</h5>
+  <a class="btn btn-outline-primary btn-sm" href="{% url 'upload_data' %}">Cargar datos</a>
+</div>
+
+<form class="row g-2 mb-3" method="get">
+  <div class="col-12 col-md-3">
+    <input class="form-control" name="oficina" placeholder="Oficina" value="{{ request.GET.oficina }}">
+  </div>
+  <div class="col-12 col-md-3">
+    <select class="form-select" name="riesgo">
+      <option value="">Riesgo actual (todos)</option>
+      <option value="0" {% if request.GET.riesgo == "0" %}selected{% endif %}>Bajo (0 mora)</option>
+      <option value="1" {% if request.GET.riesgo == "1" %}selected{% endif %}>Alto (>0 mora)</option>
+    </select>
+  </div>
+  <div class="col-12 col-md-3">
+    <select class="form-select" name="active">
+      <option value="">Estado (todos)</option>
+      <option value="1" {% if request.GET.active == "1" %}selected{% endif %}>Activos</option>
+      <option value="0" {% if request.GET.active == "0" %}selected{% endif %}>Inactivos</option>
+    </select>
+  </div>
+  <div class="col-12 col-md-3">
+    <button class="btn btn-primary w-100" type="submit">Filtrar</button>
+  </div>
+</form>
+
+<div class="card shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-striped mb-0">
+      <thead>
+        <tr>
+          <th>Cliente</th>
+          <th>Oficina</th>
+          <th>Riesgo actual</th>
+          <th>Activo</th>
+          <th class="text-end">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td>{{ r.cliente }}</td>
+          <td>{{ r.oficina }}</td>
+          <td>
+            {% if r.riesgo_actual %}
+              <span class="badge bg-danger">Alto</span>
+            {% else %}
+              <span class="badge bg-success">Bajo</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if r.is_active %}
+              <span class="badge bg-success">Activo</span>
+            {% else %}
+              <span class="badge bg-secondary">Inactivo</span>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            <a class="btn btn-outline-primary btn-sm" href="{% url 'customer_detail' r.cliente %}">Ver / Evaluar</a>
+            <a class="btn btn-outline-secondary btn-sm" href="{% url 'customer_edit' r.cliente %}">Modificar</a>
+            <form action="{% url 'customer_toggle_active' r.cliente %}" method="post" class="d-inline">
+              {% csrf_token %}
+              <button class="btn btn-outline-warning btn-sm" type="submit">
+                {% if r.is_active %}Inhabilitar{% else %}Habilitar{% endif %}
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="text-muted">No hay clientes cargados.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
