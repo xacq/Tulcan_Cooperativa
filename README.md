@@ -161,6 +161,24 @@ Verificar configuración Django:
 python manage.py check
 ```
 
+Exportar datos en UTF-8 (recomendado para evitar errores de codificación en `loaddata`):
+
+```powershell
+python manage.py dumpdata --exclude contenttypes --exclude auth.permission --exclude admin.logentry --output data_utf8.json
+```
+
+Cargar fixture en PostgreSQL:
+
+```powershell
+python manage.py loaddata data_utf8.json
+```
+
+Si el archivo fue guardado accidentalmente en `cp1252`, convertirlo a UTF-8 antes de `loaddata`:
+
+```powershell
+python -c "from pathlib import Path; p=Path('data_utf8.json'); p.write_text(p.read_text(encoding='cp1252'), encoding='utf-8')"
+```
+
 ## Entrenamiento del modelo (opcional)
 
 Script:
@@ -186,7 +204,9 @@ Si reentrenas, copia el artefacto o ajusta `ML_MODEL_PATH`.
 - Entorno virtual validado: `.venv` con Python `3.10.9`.
 - Dependencias del proyecto definidas en `requirements.txt`.
 - Conexión a PostgreSQL activa en `config/settings.py` (`ENGINE = django.db.backends.postgresql`).
-- La base PostgreSQL actual está vacía (migraciones aún no aplicadas en ese motor; `showmigrations` aparece en estado pendiente).
+- Migración a PostgreSQL completada: migraciones aplicadas y carga de datos ejecutada con `data_utf8.json`.
+- Validación posterior a la migración: `users=1`, `batches=1`, `customers=1691`, `operations=0`.
+- Corrección aplicada en el proceso: el fixture debe mantenerse en UTF-8 para evitar `UnicodeDecodeError` en `loaddata`.
 - El proyecto incluye un CSV de ejemplo en `data/dataset_clientes_agregado.csv`.
 - El flujo principal de login/carga/scoring está operativo.
 - Existen rutas de registro/cambio de contraseña en `accounts`, pero revisa plantillas si habilitarás ese flujo completo en producción.
