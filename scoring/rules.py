@@ -22,6 +22,20 @@ def _bucket_vivienda(d: int):
     return ("E", "Pérdida")
 
 
+# scoring/rules.py
+def cat_to_db(cat: str) -> str:
+    # "A-3" -> "A3", "C-1" -> "C1"
+    return (cat or "").replace("-", "").strip().upper()
+
+def cat_to_ui(cat_db: str) -> str:
+    # "A3" -> "A-3", "C1" -> "C-1", "D" -> "D"
+    c = (cat_db or "").strip().upper()
+    if len(c) == 2 and c[0] in "ABC" and c[1].isdigit():
+        return f"{c[0]}-{c[1]}"
+    return c
+
+
+
 def _family(tipo_credito: str) -> str:
     """
     Normaliza la familia: CONSUMO_MICRO o VIVIENDA

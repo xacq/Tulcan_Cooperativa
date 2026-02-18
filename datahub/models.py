@@ -72,6 +72,10 @@ class CustomerAggregate(models.Model):
     # riesgo_actual debería ser derivado; se mantiene pero no editable desde UI
     riesgo_actual = models.BooleanField(default=False)
 
+    # ✅ Estado vigente por norma (tabla morosidad)
+    categoria_norma = models.CharField(max_length=2, null=True, blank=True)  # A1,A2,A3,B1,B2,C1,C2,D,E
+    nivel_norma = models.CharField(max_length=32, null=True, blank=True)     # "Riesgo Normal", etc.
+
     n_operaciones = models.IntegerField(null=True, blank=True)
     n_vigentes = models.IntegerField(null=True, blank=True)
     monto_total = models.FloatField(null=True, blank=True)
@@ -145,3 +149,69 @@ def create_or_update_profile(sender, instance, created, **kwargs):
         UserProfile.objects.create(user=instance)
     else:
         UserProfile.objects.get_or_create(user=instance)
+
+# datahub/models.py
+from django.conf import settings
+from django.db import models
+
+class CustomerRiskHistory(models.Model):
+    customer = models.ForeignKey(
+        "datahub.CustomerAggregate",
+        on_delete=models.CASCADE,
+        related_name="risk_history",
+    )
+
+    # antes/después (formato DB: A1, A2, A3... sin guion)
+    categoria_anterior = models.CharField(max_length=2, null=True, blank=True)
+    categoria_nueva = models.CharField(max_length=2)
+
+    nivel = models.CharField(max_length=32)
+    dias_mora = models.IntegerField(default=0)
+    tipo_credito = models.CharField(max_length=32, null=True, blank=True)
+
+    # scoring
+    proba_ml = models.FloatField(null=True, blank=True)          # 0..1
+    proba_final = models.FloatField(null=True, blank=True)       # 0..1 (ajustada por norma)
+    pred_ml = models.BooleanField(default=False)
+
+    # auditoría
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.CharField(max_length=150, null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+from django.db import models
+from django.conf import settings
+
+class CustomerAggregateHistory(models.Model):
+    cliente = models.ForeignKey(
+        "CustomerAggregate",
+        on_delete=models.CASCADE,
+        related_name="history"
+    )
+
+    changed_at = models.DateTimeField(auto_now_add=True)
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
+
+    # "EDIT" (cambio de campos), "SCORE" (evaluación), etc.
+    action = models.CharField(max_length=16, default="EDIT")
+
+    # snapshot/diff
+    before_json = models.JSONField(null=True, blank=True)
+    after_json = models.JSONField(null=True, blank=True)
+    diff_json = models.JSONField(null=True, blank=True)
+
+    notes = models.CharField(max_length=255, blank=True, default="")
+
+    class Meta:
+        ordering = ["-changed_at"]
+
+    def __str__(self):
+        return f"{self.cliente_id} {self.action} {self.changed_at}"

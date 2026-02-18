@@ -1,36 +1,62 @@
 {% extends "base.html" %}
 {% block content %}
-<h5 class="mb-3">Operaciones (vista rápida)</h5>
+
+
+<h5 class="mb-3">Historial de reevaluaciones / cambios (clientes manipulados)</h5>
+
 <div class="card shadow-sm">
-  <div class="table-responsive">
-    <table class="table table-striped mb-0">
-      <thead>
-        <tr>
-          <th>Cliente</th>
-          <th>Oficina</th>
-          <th>Estado</th>
-          <th>Tipo</th>
-          <th>Monto</th>
-          <th>Saldo</th>
-          <th>Días mora</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for r in rows %}
-        <tr>
-          <td>{{ r.cliente }}</td>
-          <td>{{ r.oficina }}</td>
-          <td>{{ r.estado }}</td>
-          <td>{{ r.tipo_credito }}</td>
-          <td>{{ r.monto_otorgado }}</td>
-          <td>{{ r.saldo_total }}</td>
-          <td>{{ r.dias_mora }}</td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="7" class="text-muted">No hay operaciones cargadas.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Usuario</th>
+            <th>Cliente</th>
+            <th>Tipo crédito</th>
+            <th>Días mora</th>
+            <th>Cat. anterior</th>
+            <th>Cat. nueva</th>
+            <th>Nivel</th>
+            <th>ML</th>
+            <th>Final</th>
+            <th>Pred</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if history_rows %}
+            {% for h in history_rows %}
+              <tr>
+                <td>{{ h.created_at }}</td>
+                <td>{{ h.created_by }}</td>
+                <td>
+                  <a href="{% url 'customer_detail' h.customer.cliente %}">{{ h.customer.cliente }}</a>
+                </td>
+                <td>{{ h.tipo_credito }}</td>
+                <td>{{ h.dias_mora }}</td>
+                <td>{{ h.categoria_anterior|default:"-" }}</td>
+                <td><b>{{ h.categoria_nueva|default:"-" }}</b></td>
+                <td class="text-muted">{{ h.nivel|default:"-" }}</td>
+                <td>{{ h.proba_ml|floatformat:4 }}</td>
+                <td>{{ h.proba_final|floatformat:4 }}</td>
+                <td>
+                  {% if h.pred_ml %}
+                    <span class="badge bg-danger">ALTO</span>
+                  {% else %}
+                    <span class="badge bg-success">BAJO</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="11" class="text-muted">Aún no hay historial (haz una evaluación y cambia categoría).</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
+
 {% endblock %}

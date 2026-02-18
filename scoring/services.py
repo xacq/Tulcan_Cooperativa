@@ -3,11 +3,14 @@ import joblib
 import pandas as pd
 from functools import lru_cache
 from django.conf import settings
+from scoring.rules import classify_morosidad, adjust_probability_by_category, decision_final, cat_to_db
+
 
 def _debug_print(*args):
     # Solo imprime si DEBUG=True
     if getattr(settings, "DEBUG", False):
         print(*args)
+
 
 @lru_cache(maxsize=1)
 def load_artifact():
@@ -25,10 +28,12 @@ def load_artifact():
     artifact = joblib.load(path)
     return artifact
 
+
 def reload_artifact():
     """Útil si reemplazas el .joblib sin reiniciar el server."""
     load_artifact.cache_clear()
     return load_artifact()
+
 
 def _expected_columns(pipeline):
     # sklearn >= 1.0 puede exponer feature_names_in_
@@ -44,22 +49,20 @@ def _expected_columns(pipeline):
                 cols.extend(c)
     return list(dict.fromkeys(cols))  # unique preserve order
 
+
 def _to_str_or_none(v):
     if v is None:
         return None
     s = str(v).strip()
     return s if s != "" else None
 
+
 def score_customer(customer_obj):
     artifact = load_artifact()
     pipeline = artifact["pipeline"]
-    cols = _expected_columns(pipeline)
 
-    # IMPORTANTE:
-    # - max_dias_mora NO va al modelo (define regla)
-    # - calificacion_riesgo NO va al modelo (contraste)
+    # ==== 1) ML crudo (0..1) ====
     row = {
-        # numéricas/agregadas
         "n_operaciones": customer_obj.n_operaciones,
         "n_vigentes": customer_obj.n_vigentes,
         "monto_total": customer_obj.monto_total,
@@ -70,28 +73,44 @@ def score_customer(customer_obj):
         "antiguedad_max_dias": customer_obj.antiguedad_max_dias,
         "dias_hasta_ultimo_venc": customer_obj.dias_hasta_ultimo_venc,
 
-        # categóricas (a string para consistencia)
-        "oficina_mode": _to_str_or_none(customer_obj.oficina),
-        "tipo_credito_mode": _to_str_or_none(customer_obj.tipo_credito),
-        "garantia_mode": _to_str_or_none(customer_obj.garantia),
-        "sexo_mode": _to_str_or_none(customer_obj.sexo),
+        "oficina_mode": customer_obj.oficina,
+        "tipo_credito_mode": customer_obj.tipo_credito,
+        "garantia_mode": customer_obj.garantia,
+        "sexo_mode": customer_obj.sexo,
     }
 
     df = pd.DataFrame([row])
 
-    # asegura columnas que espera el pipeline
-    for c in cols:
-        if c not in df.columns:
-            df[c] = None
-    df = df[cols]
+    proba_ml = float(pipeline.predict_proba(df)[:, 1][0])  # 0..1
+    threshold = float(artifact.get("threshold_proba", 0.5))
+    pred_ml = int(proba_ml >= threshold)
 
-    proba = float(pipeline.predict_proba(df)[:, 1][0])
-    thr = float(artifact.get("threshold_proba", 0.5))
-    pred = int(proba >= thr)
+    # ==== 2) Regla normativa por TABLA ====
+    cat_ui, nivel = classify_morosidad(customer_obj.tipo_credito, customer_obj.max_dias_mora)
+    cat_db = cat_to_db(cat_ui)  # A3, C1, etc.
+
+    # ==== 3) Proba final ajustada por norma (si aplica) ====
+    proba_final = float(adjust_probability_by_category(proba_ml, cat_ui))  # tu función acepta A-3, etc.
+    pred_final = int(proba_final >= threshold)
+
+    # ==== 4) Riesgo actual (norma manda) ====
+    # Política mínima: C1/C2/D/E => ALTO, A/B => BAJO
+    riesgo_norma = 1 if cat_db in ("C1","C2","D","E") else 0
+
+    # ==== 5) Recomendación opcional ====
+    decision = decision_final(cat_ui, proba_final, threshold_aprob=threshold)
 
     return {
-        "proba_riesgo_alto": proba,
-        "pred_riesgo_alto": pred,  # 1 alto, 0 bajo
-        "threshold": thr,
-        "target_definition": artifact.get("target_definition", ""),
+        "proba_riesgo_alto": proba_ml,
+        "pred_riesgo_alto": pred_final,           # usa final para UI
+        "threshold": threshold,
+
+        "categoria_morosidad": cat_ui,            # "C-1" (para UI)
+        "categoria_morosidad_db": cat_db,         # "C1" (para DB)
+        "nivel_morosidad": nivel,
+        "proba_final": proba_final,               # 0..1
+        "riesgo_norma": riesgo_norma,             # 0/1
+        "decision": decision,
     }
+
+    

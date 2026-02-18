@@ -10,11 +10,32 @@
     <input class="form-control" name="oficina" placeholder="Oficina" value="{{ request.GET.oficina }}">
   </div>
   <div class="col-12 col-md-3">
-    <select class="form-select" name="riesgo">
-      <option value="">Riesgo actual (todos)</option>
-      <option value="0" {% if request.GET.riesgo == "0" %}selected{% endif %}>Bajo (0 mora)</option>
-      <option value="1" {% if request.GET.riesgo == "1" %}selected{% endif %}>Alto (>0 mora)</option>
+    <div class="input-group">
+      <select class="form-select" name="tipo_credito">
+        <option value="" {% if not filters.tipo_credito %}selected{% endif %}>Tipo crédito (todos)</option>
+        <option value="CONSUMO" {% if filters.tipo_credito|upper == "CONSUMO" %}selected{% endif %}>Consumo</option>
+        <option value="MICROCRÉDITO" {% if filters.tipo_credito|upper == "MICROCRÉDITO" or filters.tipo_credito|upper == "MICROCREDITO" %}selected{% endif %}>Microcrédito</option>
+        <option value="VIVIENDA" {% if filters.tipo_credito|upper == "VIVIENDA" %}selected{% endif %}>Vivienda</option>
     </select>
+    </div>
+
+  </div>
+  <div class="col-12 col-md-3">
+    <div class="input-group">
+      <select class="form-select" name="categoria">
+        <option value="" {% if not filters.categoria %}selected{% endif %}>Categoría (todas)</option>
+
+        <option value="A1" {% if filters.categoria|upper == "A1" %}selected{% endif %}>A1</option>
+        <option value="A2" {% if filters.categoria|upper == "A2" %}selected{% endif %}>A2</option>
+        <option value="A3" {% if filters.categoria|upper == "A3" %}selected{% endif %}>A3</option>
+        <option value="B1" {% if filters.categoria|upper == "B1" %}selected{% endif %}>B1</option>
+        <option value="B2" {% if filters.categoria|upper == "B2" %}selected{% endif %}>B2</option>
+        <option value="C1" {% if filters.categoria|upper == "C1" %}selected{% endif %}>C1</option>
+        <option value="C2" {% if filters.categoria|upper == "C2" %}selected{% endif %}>C2</option>
+        <option value="D"  {% if filters.categoria|upper == "D"  %}selected{% endif %}>D</option>
+        <option value="E"  {% if filters.categoria|upper == "E"  %}selected{% endif %}>E</option>
+      </select>
+    </div>
   </div>
   <div class="col-12 col-md-3">
     <select class="form-select" name="active">
@@ -23,7 +44,7 @@
       <option value="0" {% if request.GET.active == "0" %}selected{% endif %}>Inactivos</option>
     </select>
   </div>
-  <div class="col-12 col-md-3">
+  <div class="col-12 col-md-12">
     <button class="btn btn-primary w-100" type="submit">Filtrar</button>
   </div>
 </form>

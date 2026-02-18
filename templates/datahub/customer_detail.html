@@ -18,7 +18,15 @@
           <dt class="col-5">Tipo crédito</dt><dd class="col-7">{{ c.tipo_credito }}</dd>
           <dt class="col-5">Garantía</dt><dd class="col-7">{{ c.garantia }}</dd>
           <dt class="col-5">Sexo</dt><dd class="col-7">{{ c.sexo }}</dd>
-          <dt class="col-5">Calificación (contraste)</dt><dd class="col-7">{{ c.calificacion_riesgo }}</dd>
+          <dt class="col-5">Calificación anterior</dt><dd class="col-7 badge bg-danger">{{ c.calificacion_riesgo }}</dd>
+          <dt class="col-5">Categoría vigente</dt>
+            <dd class="col-7 badge bg-success">
+            {% if c.categoria_norma %}
+              {{ c.categoria_norma }}
+            {% else %}
+              <span class="text-muted">-</span>
+            {% endif %}
+            </dd>
           <dt class="col-5">N operaciones</dt><dd class="col-7">{{ c.n_operaciones }}</dd>
           <dt class="col-5">N vigentes</dt><dd class="col-7">{{ c.n_vigentes }}</dd>
           <dt class="col-5">Monto total</dt><dd class="col-7">{{ c.monto_total }}</dd>
@@ -91,6 +99,50 @@
       </div>
     </div>
   </div>
+
+  <div class="card shadow-sm mt-3">
+    <div class="card-body">
+      <h6 class="mb-3">Histórico de cambios</h6>
+
+      {% if hist %}
+        <div class="table-responsive">
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Usuario</th>
+                <th>Acción</th>
+                <th>Cambios</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for h in hist %}
+              <tr>
+                <td class="text-muted">{{ h.changed_at }}</td>
+                <td>{{ h.changed_by.username|default:"-" }}</td>
+                <td><span class="badge bg-secondary">{{ h.action }}</span></td>
+                <td>
+                  {% if h.diff_json %}
+                    <ul class="mb-0">
+                      {% for k,v in h.diff_json.items %}
+                        <li><b>{{ k }}</b>: {{ v.from }} → {{ v.to }}</li>
+                      {% endfor %}
+                    </ul>
+                  {% else %}
+                    <span class="text-muted">-</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="text-muted small">Aún no hay cambios registrados para este cliente.</div>
+      {% endif %}
+    </div>
+  </div>
+
 </div>
 {% endblock %}
 
