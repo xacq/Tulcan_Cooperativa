@@ -1,10 +1,17 @@
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_POST
 from django.utils import timezone
+from django.db.models import Count, Sum, Avg, Value, Q
+from django.db.models.functions import Coalesce
 import numpy as np
+import csv
+from io import BytesIO
+from openpyxl import Workbook
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
 
 from .forms import UploadDataForm, CustomerAggregateForm
 from .models import DataBatch, CustomerAggregate, CreditOperation
@@ -282,4 +289,186 @@ def operations_list(request):
 
     return render(request, "datahub/operations_list.html", {
         "history_rows": qs,
+    })
+
+
+def _dataset_by_office():
+    rows = (
+        CustomerAggregate.objects
+        .values("oficina")
+        .annotate(
+            total_clientes=Count("id"),
+            clientes_activos=Count("id", filter=Q(is_active=True)),
+            total_operaciones=Coalesce(Sum("n_operaciones"), Value(0)),
+            mora_promedio=Coalesce(Avg("max_dias_mora"), Value(0.0)),
+        )
+        .order_by("oficina")
+    )
+    return [
+        {
+            "oficina": row["oficina"] or "SIN OFICINA",
+            "total_clientes": row["total_clientes"],
+            "clientes_activos": row["clientes_activos"],
+            "total_operaciones": row["total_operaciones"],
+            "mora_promedio": round(float(row["mora_promedio"] or 0), 2),
+        }
+        for row in rows
+    ]
+
+
+def _dataset_users_more_than_2_operations():
+    operation_counts = {
+        row["cliente"]: row["total"]
+        for row in CreditOperation.objects.values("cliente").annotate(total=Count("id"))
+    }
+
+    rows = []
+    for customer in CustomerAggregate.objects.all().order_by("cliente"):
+        total_ops = customer.n_operaciones if customer.n_operaciones is not None else operation_counts.get(customer.cliente, 0)
+        if total_ops > 2:
+            rows.append({
+                "cliente": customer.cliente,
+                "oficina": customer.oficina,
+                "tipo_credito": customer.tipo_credito,
+                "total_operaciones": total_ops,
+                "max_dias_mora": customer.max_dias_mora,
+                "categoria_norma": customer.categoria_norma,
+                "calificacion_riesgo": customer.calificacion_riesgo,
+            })
+
+    rows.sort(key=lambda item: (-item["total_operaciones"], item["cliente"]))
+    return rows
+
+
+def _dataset_by_category():
+    rows = (
+        CustomerAggregate.objects
+        .values("categoria_norma", "calificacion_riesgo")
+        .annotate(
+            total_clientes=Count("id"),
+            total_operaciones=Coalesce(Sum("n_operaciones"), Value(0)),
+            saldo_promedio=Coalesce(Avg("saldo_total"), Value(0.0)),
+        )
+        .order_by("categoria_norma", "calificacion_riesgo")
+    )
+    result = []
+    for row in rows:
+        categoria = row["categoria_norma"] or row["calificacion_riesgo"] or "SIN CATEGORÍA"
+        result.append({
+            "categoria": categoria,
+            "total_clientes": row["total_clientes"],
+            "total_operaciones": row["total_operaciones"],
+            "saldo_promedio": round(float(row["saldo_promedio"] or 0), 2),
+        })
+    return result
+
+
+def _export_csv(report_title, columns, rows):
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = f'attachment; filename="{report_title}.csv"'
+    writer = csv.writer(response)
+    writer.writerow(columns)
+    for row in rows:
+        writer.writerow([row.get(col, "") for col in columns])
+    return response
+
+
+def _export_xlsx(report_title, columns, rows):
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Reporte"
+    ws.append(columns)
+    for row in rows:
+        ws.append([row.get(col, "") for col in columns])
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    response = HttpResponse(
+        output.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = f'attachment; filename="{report_title}.xlsx"'
+    return response
+
+
+def _export_pdf(report_title, columns, rows):
+    output = BytesIO()
+    p = canvas.Canvas(output, pagesize=letter)
+    width, height = letter
+
+    y = height - 40
+    p.setFont("Helvetica-Bold", 12)
+    p.drawString(40, y, report_title.replace("_", " ").title())
+    y -= 20
+
+    p.setFont("Helvetica", 8)
+    header = " | ".join(columns)
+    p.drawString(40, y, header[:140])
+    y -= 12
+
+    for row in rows:
+        line = " | ".join(str(row.get(col, "")) for col in columns)
+        p.drawString(40, y, line[:140])
+        y -= 12
+        if y <= 40:
+            p.showPage()
+            y = height - 40
+            p.setFont("Helvetica", 8)
+
+    p.save()
+    output.seek(0)
+
+    response = HttpResponse(output.getvalue(), content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="{report_title}.pdf"'
+    return response
+
+
+def _build_report(report_type):
+    if report_type == "oficinas":
+        columns = ["oficina", "total_clientes", "clientes_activos", "total_operaciones", "mora_promedio"]
+        rows = _dataset_by_office()
+        title = "reporte_oficinas"
+    elif report_type == "usuarios_operaciones":
+        columns = ["cliente", "oficina", "tipo_credito", "total_operaciones", "max_dias_mora", "categoria_norma", "calificacion_riesgo"]
+        rows = _dataset_users_more_than_2_operations()
+        title = "reporte_usuarios_mas_2_operaciones"
+    elif report_type == "categorias":
+        columns = ["categoria", "total_clientes", "total_operaciones", "saldo_promedio"]
+        rows = _dataset_by_category()
+        title = "reporte_categorias"
+    else:
+        return None, None, None
+    return title, columns, rows
+
+
+@login_required
+def reports(request):
+    report_type = request.GET.get("report", "oficinas")
+    output_format = request.GET.get("format", "")
+
+    report_title, columns, rows = _build_report(report_type)
+    if not report_title:
+        messages.error(request, "Tipo de reporte no válido.")
+        return redirect("reports")
+
+    if output_format == "csv":
+        return _export_csv(report_title, columns, rows)
+    if output_format == "xlsx":
+        return _export_xlsx(report_title, columns, rows)
+    if output_format == "pdf":
+        return _export_pdf(report_title, columns, rows)
+
+    table_rows = [[row.get(col, "") for col in columns] for row in rows]
+
+    return render(request, "datahub/reports.html", {
+        "report_type": report_type,
+        "columns": columns,
+        "table_rows": table_rows,
+        "report_options": [
+            ("oficinas", "Por oficina"),
+            ("usuarios_operaciones", "Usuarios con más de 2 operaciones"),
+            ("categorias", "Por categorías"),
+        ],
     })
