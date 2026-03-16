@@ -12,4 +12,5 @@ urlpatterns = [
     path("customers/<str:cliente>/score/", views.customer_score, name="customer_score"),
 
     path("operations/", views.operations_list, name="operations_list"),
+    path("reports/", views.reports, name="reports"),
 ]
