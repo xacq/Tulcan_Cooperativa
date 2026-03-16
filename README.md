@@ -199,6 +199,56 @@ Nota importante: la app carga por defecto el modelo desde:
 
 Si reentrenas, copia el artefacto o ajusta `ML_MODEL_PATH`.
 
+
+## Recuperación de contraseña con correo gratuito (entorno de pruebas)
+
+La app ya tiene rutas de recuperación activas con vistas nativas de Django:
+
+- `/accounts/password-reset/`
+- `/accounts/password-reset/done/`
+- `/accounts/reset/<uidb64>/<token>/`
+
+Para pruebas sin hosting puedes usar un servidor SMTP gratuito de pruebas como **Mailtrap** (sandbox) o **Brevo** (plan free).
+
+### Opción recomendada para pruebas rápidas: Mailtrap
+
+1. Crea una cuenta en Mailtrap y entra a **Email Testing > Inboxes**.
+2. Copia las credenciales SMTP del inbox.
+3. Define variables de entorno antes de levantar Django:
+
+```bash
+export EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+export EMAIL_HOST=sandbox.smtp.mailtrap.io
+export EMAIL_PORT=587
+export EMAIL_HOST_USER=<tu_usuario_mailtrap>
+export EMAIL_HOST_PASSWORD=<tu_password_mailtrap>
+export EMAIL_USE_TLS=true
+export DEFAULT_FROM_EMAIL=no-reply@cooperativa.local
+```
+
+4. Levanta el proyecto y solicita recuperación en `/accounts/password-reset/`.
+5. Abre Mailtrap y usa el enlace recibido para confirmar que el flujo funciona.
+
+### Alternativa sin enviar correo real: backend de consola
+
+Si no quieres depender de SMTP todavía, deja:
+
+```bash
+export EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
+```
+
+Con eso, el enlace de recuperación se imprime en la terminal del `runserver`, útil para validar token y autenticación localmente.
+
+### Validación rápida
+
+```bash
+python manage.py check
+python manage.py shell -c "from django.core.mail import send_mail; send_mail('Prueba','OK','no-reply@cooperativa.local',['test@example.com'])"
+```
+
+Si usas `console.EmailBackend`, el segundo comando imprime el correo en consola.
+Si usas SMTP (Mailtrap/Brevo), el correo debe verse en tu bandeja de pruebas.
+
 ## Estado actual y notas
 
 - Entorno virtual validado: `.venv` con Python `3.10.9`.
