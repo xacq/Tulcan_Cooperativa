@@ -9,7 +9,7 @@ Aplicación web para cargar datos crediticios, visualizar clientes/operaciones y
 
 El proyecto implementa los siguientes módulos:
 
-- `accounts`: login/logout, recuperación de contraseña y middleware para forzar cambio de clave si el perfil lo requiere.
+- `accounts`: login/logout, registro, cambio de contraseña, recuperación de contraseña por correo y middleware para forzar cambio de clave si el perfil lo requiere.
 - `datahub`: carga de archivos (`CSV`, `XLS`, `XLSX`), trazabilidad de batches, catálogo de clientes agregados y operaciones.
 - `scoring`: inferencia con modelo `.joblib` y reglas para decisión final.
 
@@ -22,36 +22,45 @@ Flujo funcional principal:
 
 ## Stack tecnológico
 
-- Python 3.10.9 (entorno virtual `.venv`)
-- Django 5.2.x
-- PostgreSQL (configurado como motor principal en `config/settings.py`)
-- pandas / numpy
-- scikit-learn / joblib
-- openpyxl (lectura `.xlsx`)
-- xlrd (lectura `.xls`, recomendado)
-- Bootstrap 5 (CDN)
+| Paquete | Versión | Uso |
+|---|---|---|
+| Python | 3.10.9 | Entorno virtual `.venv` |
+| Django | 5.2.11 | Framework principal |
+| PostgreSQL | — | Motor de base de datos |
+| psycopg[binary] | 3.3.2 | Driver PostgreSQL |
+| pandas | 2.3.3 | Procesamiento de datos |
+| numpy | 2.2.6 | Cómputo numérico |
+| scikit-learn | 1.7.2 | Modelo ML |
+| joblib | 1.5.3 | Serialización de modelo |
+| openpyxl | 3.1.5 | Lectura `.xlsx` |
+| xlrd | 2.0.1 | Lectura `.xls` |
+| reportlab | 4.4.4 | Generación de PDFs |
+| matplotlib | 3.10.8 | Gráficos |
+| python-dotenv | 1.2.2 | Variables de entorno desde `.env` |
+| Bootstrap 5 | CDN | Estilos frontend |
 
 ## Estructura relevante
 
-- `config/`: settings y rutas globales.
-- `accounts/`: autenticación.
-- `datahub/`: modelos de lotes, clientes y operaciones; importador; comando de gestión.
-- `scoring/`: reglas y servicio de scoring ML.
-- `data/`: datasets y artefactos de modelo.
-- `templates/`: vistas HTML.
+```
+ML_cooperativa/
+├── .env                  ← Variables de entorno (NO subir a Git)
+├── config/               ← settings, urls, wsgi/asgi
+├── accounts/             ← autenticación, password reset, middleware
+├── datahub/              ← modelos de lotes, clientes, operaciones e importador
+├── scoring/              ← reglas y servicio de scoring ML
+├── data/                 ← datasets y artefactos del modelo
+├── templates/            ← vistas HTML (base, accounts, datahub, scoring)
+├── static/               ← CSS/JS estáticos
+├── requirements.txt
+└── manage.py
+```
 
 ## Requisitos previos
 
 En Windows (PowerShell):
 
 ```powershell
-python --version
-```
-
-Instalar dependencias mínimas:
-
-```powershell
-pip install -r requirements.txt
+python --version   # debe ser 3.10.x
 ```
 
 ## Ejecución del proyecto
@@ -71,28 +80,67 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-3. Ejecutar migraciones:
+3. Crear el archivo `.env` (ver sección [Configuración de variables de entorno](#configuración-de-variables-de-entorno)):
+
+```powershell
+# Edita .env con tus valores reales antes de continuar
+```
+
+4. Ejecutar migraciones:
 
 ```powershell
 python manage.py migrate
 ```
 
-4. Crear usuario administrador:
+5. Crear usuario administrador:
 
 ```powershell
 python manage.py createsuperuser
 ```
 
-5. Levantar servidor:
+6. Levantar servidor:
 
 ```powershell
 python manage.py runserver
 ```
 
-6. Abrir en navegador:
+7. Abrir en navegador:
 
 - App: `http://127.0.0.1:8000/`
 - Admin: `http://127.0.0.1:8000/admin/`
+
+## Configuración de variables de entorno
+
+El proyecto usa `python-dotenv` para cargar configuración desde un archivo `.env` en la raíz. Este archivo **no se incluye en el repositorio** (está en `.gitignore`).
+
+Crea el archivo `ML_cooperativa/.env` con el siguiente contenido:
+
+```env
+# ── Email (Mailtrap Sandbox para pruebas) ──────────────────────────────────
+EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+EMAIL_HOST=sandbox.smtp.mailtrap.io
+EMAIL_PORT=587
+EMAIL_HOST_USER=<tu_usuario_mailtrap>
+EMAIL_HOST_PASSWORD=<tu_password_mailtrap>
+EMAIL_USE_TLS=true
+EMAIL_USE_SSL=false
+DEFAULT_FROM_EMAIL=no-reply@cooperativa.local
+```
+
+> **Dónde obtener las credenciales de Mailtrap:**
+> 1. Inicia sesión en [mailtrap.io](https://mailtrap.io)
+> 2. Ve a **Email Testing → Inboxes**
+> 3. Haz clic en tu inbox → pestaña **SMTP Settings**
+> 4. Selecciona **Django** en el dropdown de integraciones
+> 5. Copia `USERNAME` y `PASSWORD`
+
+### Alternativa sin SMTP (solo terminal)
+
+Para desarrollo sin correo real, usa el backend de consola (el enlace se imprime en la terminal del `runserver`):
+
+```env
+EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
+```
 
 ## Uso básico en la app
 
@@ -102,6 +150,30 @@ python manage.py runserver
 4. Subir archivo.
 5. Revisar `Batches` para estado de carga.
 6. Ir a `Clientes` para ver detalle y usar `Evaluar con modelo`.
+
+## Flujo de autenticación y contraseñas
+
+El módulo `accounts` cubre el ciclo completo de credenciales:
+
+| URL | Descripción |
+|---|---|
+| `/accounts/login/` | Inicio de sesión |
+| `/accounts/logout/` | Cierre de sesión |
+| `/accounts/password-change/` | Cambio de contraseña (usuario autenticado) |
+| `/accounts/password-reset/` | Solicitar recuperación por correo |
+| `/accounts/password-reset/done/` | Confirmación de envío |
+| `/accounts/reset/<uidb64>/<token>/` | Establecer nueva contraseña |
+| `/accounts/reset/done/` | Confirmación de restablecimiento |
+
+**Middleware de cambio forzado:** si un usuario tiene `must_change_password=True` en su `UserProfile` y entra con la contraseña genérica (`123456789`), es redirigido automáticamente a `password-change` antes de poder acceder.
+
+### Verificar el flujo de recuperación
+
+```powershell
+python manage.py shell -c "from django.core.mail import send_mail; send_mail('Test Mailtrap', 'OK', 'no-reply@cooperativa.local', ['tu@email.com']); print('OK')"
+```
+
+Si usas Mailtrap Sandbox, el correo aparece en tu inbox de pruebas. Si usas `console.EmailBackend`, se imprime en la terminal.
 
 ## Formato esperado de archivos
 
@@ -143,9 +215,9 @@ El endpoint de scoring combina:
 
 Decisión final:
 
-- `D/E` -> `RECHAZAR`
-- `C-1/C-2` -> `REVISIÓN`
-- `A/B` -> según umbral de probabilidad
+- `D/E` → `RECHAZAR`
+- `C-1/C-2` → `REVISIÓN`
+- `A/B` → según umbral de probabilidad
 
 ## Comandos útiles
 
@@ -161,7 +233,7 @@ Verificar configuración Django:
 python manage.py check
 ```
 
-Exportar datos en UTF-8 (recomendado para evitar errores de codificación en `loaddata`):
+Exportar datos en UTF-8:
 
 ```powershell
 python manage.py dumpdata --exclude contenttypes --exclude auth.permission --exclude admin.logentry --output data_utf8.json
@@ -173,7 +245,7 @@ Cargar fixture en PostgreSQL:
 python manage.py loaddata data_utf8.json
 ```
 
-Si el archivo fue guardado accidentalmente en `cp1252`, convertirlo a UTF-8 antes de `loaddata`:
+Si el archivo fue guardado accidentalmente en `cp1252`, convertirlo antes de `loaddata`:
 
 ```powershell
 python -c "from pathlib import Path; p=Path('data_utf8.json'); p.write_text(p.read_text(encoding='cp1252'), encoding='utf-8')"
@@ -181,92 +253,34 @@ python -c "from pathlib import Path; p=Path('data_utf8.json'); p.write_text(p.re
 
 ## Entrenamiento del modelo (opcional)
 
-Script:
+Script: `data/Trainer.py`
 
-- `data/Trainer.py`
+Entrada: `data/BDD_COACTULCAN.xlsx`
 
-Entrada esperada:
+Salida: `data/models/credit_risk_customer_model.joblib`
 
-- `data/BDD_COACTULCAN.xlsx`
+> La app carga por defecto el modelo desde `data/credit_risk_customer_model.joblib` (definido en `config/settings.py` como `ML_MODEL_PATH`). Si reentrenas, copia el artefacto o ajusta esa variable.
 
-Salida del script:
+## Estado actual
 
-- `data/models/credit_risk_customer_model.joblib`
-
-Nota importante: la app carga por defecto el modelo desde:
-
-- `data/credit_risk_customer_model.joblib` (definido en `config/settings.py` como `ML_MODEL_PATH`)
-
-Si reentrenas, copia el artefacto o ajusta `ML_MODEL_PATH`.
-
-
-## Recuperación de contraseña con correo gratuito (entorno de pruebas)
-
-La app ya tiene rutas de recuperación activas con vistas nativas de Django:
-
-- `/accounts/password-reset/`
-- `/accounts/password-reset/done/`
-- `/accounts/reset/<uidb64>/<token>/`
-
-Para pruebas sin hosting puedes usar un servidor SMTP gratuito de pruebas como **Mailtrap** (sandbox) o **Brevo** (plan free).
-
-### Opción recomendada para pruebas rápidas: Mailtrap
-
-1. Crea una cuenta en Mailtrap y entra a **Email Testing > Inboxes**.
-2. Copia las credenciales SMTP del inbox.
-3. Define variables de entorno antes de levantar Django:
-
-```bash
-export EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
-export EMAIL_HOST=sandbox.smtp.mailtrap.io
-export EMAIL_PORT=587
-export EMAIL_HOST_USER=<tu_usuario_mailtrap>
-export EMAIL_HOST_PASSWORD=<tu_password_mailtrap>
-export EMAIL_USE_TLS=true
-export DEFAULT_FROM_EMAIL=no-reply@cooperativa.local
-```
-
-4. Levanta el proyecto y solicita recuperación en `/accounts/password-reset/`.
-5. Abre Mailtrap y usa el enlace recibido para confirmar que el flujo funciona.
-
-### Alternativa sin enviar correo real: backend de consola
-
-Si no quieres depender de SMTP todavía, deja:
-
-```bash
-export EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
-```
-
-Con eso, el enlace de recuperación se imprime en la terminal del `runserver`, útil para validar token y autenticación localmente.
-
-### Validación rápida
-
-```bash
-python manage.py check
-python manage.py shell -c "from django.core.mail import send_mail; send_mail('Prueba','OK','no-reply@cooperativa.local',['test@example.com'])"
-```
-
-Si usas `console.EmailBackend`, el segundo comando imprime el correo en consola.
-Si usas SMTP (Mailtrap/Brevo), el correo debe verse en tu bandeja de pruebas.
-
-## Estado actual y notas
-
-- Entorno virtual validado: `.venv` con Python `3.10.9`.
-- Dependencias del proyecto definidas en `requirements.txt`.
-- Conexión a PostgreSQL activa en `config/settings.py` (`ENGINE = django.db.backends.postgresql`).
-- Migración a PostgreSQL completada: migraciones aplicadas y carga de datos ejecutada con `data_utf8.json`.
-- Validación posterior a la migración: `users=1`, `batches=1`, `customers=1691`, `operations=0`.
-- Corrección aplicada en el proceso: el fixture debe mantenerse en UTF-8 para evitar `UnicodeDecodeError` en `loaddata`.
-- El proyecto incluye un CSV de ejemplo en `data/dataset_clientes_agregado.csv`.
-- El flujo principal de login/carga/scoring está operativo.
-- Existen rutas de registro/cambio de contraseña en `accounts`, pero revisa plantillas si habilitarás ese flujo completo en producción.
+- Entorno virtual: `.venv` con Python `3.10.9`.
+- Motor de base de datos: PostgreSQL (`cooperativa_db` en `127.0.0.1:5432`).
+- Migración a PostgreSQL completada: `users=1`, `batches=1`, `customers=1691`, `operations=0`.
+- Flujo principal login / carga / scoring operativo.
+- Sistema de recuperación de contraseña por correo configurado y validado con Mailtrap Sandbox.
+- Variables de entorno gestionadas con `python-dotenv` (archivo `.env` excluido del repositorio).
 
 ## Seguridad y despliegue
 
-Configuración actual es de desarrollo:
+Configuración actual es de **desarrollo**:
 
 - `DEBUG=True`
 - `ALLOWED_HOSTS=[]`
 - `SECRET_KEY` embebida en código
 
-Antes de producción: mover secretos a variables de entorno, configurar hosts, base de datos robusta y hardening de Django.
+Antes de producción:
+
+- Mover `SECRET_KEY` y credenciales de BD/email a variables de entorno.
+- Configurar `ALLOWED_HOSTS` y `DEBUG=False`.
+- Usar un servidor SMTP real con dominio verificado (Mailtrap Email API o similar).
+- Aplicar hardening de Django (`SECURE_*`, HTTPS, etc.).
