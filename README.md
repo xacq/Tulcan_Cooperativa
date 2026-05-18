@@ -146,7 +146,7 @@ EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
 
 1. Ingresar con usuario creado.
 2. Ir a `Cargar datos`.
-3. Elegir modo `CUSTOMER_AGG` (agregado por cliente) o `OPERATION` (detalle por operación).
+3. Elegir modo `CUSTOMER_AGG` (agregado por cliente)
 4. Subir archivo.
 5. Revisar `Batches` para estado de carga.
 6. Ir a `Clientes` para ver detalle y usar `Evaluar con modelo`.

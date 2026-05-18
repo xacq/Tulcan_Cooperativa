@@ -7,7 +7,7 @@ class DataBatch(models.Model):
 
     MODE_CHOICES = [
         (MODE_CUSTOMER, "Agregado por cliente"),
-        (MODE_OPERATION, "Por operación"),
+        # (MODE_OPERATION, "Por operación"),
     ]
 
     uploaded_by = models.ForeignKey(User, on_delete=models.PROTECT)

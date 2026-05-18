@@ -4,7 +4,7 @@
   <h5 class="mb-0">Detalle cliente: {{ c.cliente }}</h5>
   <div class="d-flex gap-2">
     <a class="btn btn-outline-secondary btn-sm" href="{% url 'customers_list' %}">Volver</a>
-    <a class="btn btn-outline-primary btn-sm" href="{% url 'customer_edit' c.cliente %}">Modificar</a>
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'customer_edit' c.cliente %}">Revalorizar</a>
   </div>
 </div>
 
@@ -227,9 +227,9 @@
               <span class="text-muted">(${nivel})</span>
             </div>
 
-            <div class="mt-2 small text-muted">
+            <!--<div class="mt-2 small text-muted">
               ML crudo: ${probaMLPct}%
-            </div>
+            </div>-->
           </div>
 
           <div class="text-end">
@@ -243,7 +243,7 @@
         <div class="small">
           <div><b>Riesgo (regla/tablas):</b> ${data.riesgo_regla_txt ?? (data.riesgo_actual_regla === 1 ? "ALTO" : "BAJO")}</div>
           <div><b>Calificación (contraste):</b> ${data.calificacion_riesgo_contraste || "-"}</div>
-          <div class="text-muted mt-2"><b>Threshold:</b> ${data.threshold}</div>
+          <!--div class="text-muted mt-2"><b>Threshold:</b> ${data.threshold}</div>-->
         </div>
       `;
 

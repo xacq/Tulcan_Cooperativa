@@ -21,7 +21,7 @@ class Migration(migrations.Migration):
                 ('uploaded_at', models.DateTimeField(auto_now_add=True)),
                 ('file', models.FileField(upload_to='uploads/')),
                 ('file_type', models.CharField(default='', max_length=10)),
-                ('load_mode', models.CharField(choices=[('CUSTOMER_AGG', 'Agregado por cliente'), ('OPERATION', 'Por operación')], max_length=20)),
+                ('load_mode', models.CharField(choices=[('CUSTOMER_AGG', 'Agregado por cliente')], max_length=20)),
                 ('status', models.CharField(default='PENDING', max_length=20)),
                 ('rows_total', models.IntegerField(default=0)),
                 ('rows_loaded', models.IntegerField(default=0)),
